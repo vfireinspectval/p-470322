@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { useLocation } from "react-router-dom";
 
 interface LoginFormData {
   email: string;
@@ -18,10 +19,41 @@ export const LoginForm: React.FC = () => {
   const { login, loading } = useAuth();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const location = useLocation();
+  
+  // Determine if we're on the admin login page
+  const isAdminLogin = location.pathname === "/" || location.pathname.includes("admin");
 
   const onSubmit = async (data: LoginFormData) => {
     setIsSubmitting(true);
     try {
+      console.log("Login attempt with:", data.email);
+      
+      // Check if this is an admin login attempt
+      const isAdmin = data.email === "vfireinspectval@gmail.com";
+      
+      // If this is the admin login page but the email is not admin's email
+      if (isAdminLogin && !isAdmin) {
+        toast({
+          title: "Login Failed",
+          description: "This login form is for admin only. Please use the establishment login form.",
+          variant: "destructive",
+        });
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // If this is the establishment login page but the email is admin's email
+      if (!isAdminLogin && isAdmin) {
+        toast({
+          title: "Login Failed",
+          description: "Admin should use the admin login form.",
+          variant: "destructive",
+        });
+        setIsSubmitting(false);
+        return;
+      }
+      
       const success = await login(data.email, data.password);
       if (!success) {
         toast({
@@ -120,12 +152,21 @@ export const LoginForm: React.FC = () => {
       </div>
 
       <div className="flex justify-between items-center px-14 mt-6 max-sm:px-[5%]">
-        <a 
-          href="/register" 
-          className="text-[#FE623F] hover:text-[#e5563a] transition-colors text-base font-medium"
-        >
-          Register Establishment
-        </a>
+        {!isAdminLogin ? (
+          <a 
+            href="/register" 
+            className="text-[#FE623F] hover:text-[#e5563a] transition-colors text-base font-medium"
+          >
+            Register Establishment
+          </a>
+        ) : (
+          <a 
+            href="/establishment-login" 
+            className="text-[#FE623F] hover:text-[#e5563a] transition-colors text-base font-medium"
+          >
+            Establishment Login
+          </a>
+        )}
         
         <Button
           type="submit"

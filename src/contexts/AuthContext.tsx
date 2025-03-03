@@ -1,7 +1,7 @@
-
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 // User types
 export interface User {
@@ -24,41 +24,87 @@ interface AuthContextType {
 // Create context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock users - This would be replaced with Supabase in a real implementation
-const mockUsers: User[] = [
-  {
-    id: "1",
-    email: "vfireinspectval@gmail.com",
-    role: "admin",
-    password_changed: true,
-  },
-  {
-    id: "2", 
-    email: "owner@example.com",
-    role: "establishment_owner",
-    password_changed: false,
-    first_login: true,
-  }
-];
-
-// Password map - In a real app, you'd use hashed passwords in Supabase
-const passwords: Record<string, string> = {
-  "vfireinspectval@gmail.com": "vfireinspectval2025",
-  "owner@example.com": "temp123",
-};
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const location = useLocation();
 
-  // Check if there's a logged-in user in session storage
+  // Check for authenticated session on load
   useEffect(() => {
-    const storedUser = sessionStorage.getItem("user");
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-    setLoading(false);
+    const checkSession = async () => {
+      setLoading(true);
+      
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+          // Determine if user is admin or establishment owner
+          const isAdmin = session.user.email === "vfireinspectval@gmail.com";
+          
+          let userWithRole: User = {
+            id: session.user.id,
+            email: session.user.email!,
+            role: isAdmin ? "admin" : "establishment_owner",
+          };
+          
+          // If not admin, fetch establishment owner data
+          if (!isAdmin) {
+            const { data: establishmentOwner } = await supabase
+              .from("establishment_owners")
+              .select("*")
+              .eq("id", session.user.id)
+              .single();
+              
+            if (establishmentOwner) {
+              userWithRole.password_changed = establishmentOwner.password_changed;
+            }
+          }
+          
+          setUser(userWithRole);
+        }
+      } catch (error) {
+        console.error("Session check error:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    checkSession();
+    
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_IN" && session) {
+        const isAdmin = session.user.email === "vfireinspectval@gmail.com";
+        
+        let userWithRole: User = {
+          id: session.user.id,
+          email: session.user.email!,
+          role: isAdmin ? "admin" : "establishment_owner",
+        };
+        
+        // If not admin, fetch establishment owner data
+        if (!isAdmin) {
+          const { data: establishmentOwner } = await supabase
+            .from("establishment_owners")
+            .select("*")
+            .eq("id", session.user.id)
+            .single();
+            
+          if (establishmentOwner) {
+            userWithRole.password_changed = establishmentOwner.password_changed;
+          }
+        }
+        
+        setUser(userWithRole);
+      } else if (event === "SIGNED_OUT") {
+        setUser(null);
+      }
+    });
+    
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Login function
@@ -66,32 +112,109 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 500));
+      console.log("Attempting login for:", email);
       
-      const foundUser = mockUsers.find(u => u.email === email);
+      // Check if user is admin
+      const isAdmin = email === "vfireinspectval@gmail.com";
       
-      if (!foundUser || passwords[email] !== password) {
+      // Verify on correct login page
+      if (isAdmin && location.pathname === "/establishment-login") {
         toast({
-          title: "Login failed",
-          description: "Invalid email or password",
+          title: "Login Redirect",
+          description: "Admin should use the admin login page.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return false;
+      } else if (!isAdmin && location.pathname === "/") {
+        toast({
+          title: "Login Redirect",
+          description: "Establishments should use the establishment login page.",
           variant: "destructive",
         });
         setLoading(false);
         return false;
       }
       
-      // Successful login
-      setUser(foundUser);
-      sessionStorage.setItem("user", JSON.stringify(foundUser));
+      // Attempt to sign in
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
       
-      // Check if user needs to change password
-      if (foundUser.role === "establishment_owner" && !foundUser.password_changed) {
-        navigate("/change-password");
-      } else if (foundUser.role === "admin") {
+      if (error) {
+        console.error("Login error from Supabase:", error);
+        
+        // Special case for admin
+        if (isAdmin && error.message.includes("Invalid login credentials")) {
+          toast({
+            title: "Admin Login Failed",
+            description: "The admin account may not be set up in Supabase. Please create this account in Supabase Auth.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Login failed",
+            description: error.message,
+            variant: "destructive",
+          });
+        }
+        
+        setLoading(false);
+        return false;
+      }
+      
+      if (!data.user) {
+        console.error("No user returned from login");
+        toast({
+          title: "Login failed",
+          description: "No user data returned",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return false;
+      }
+      
+      console.log("Login successful, user:", data.user);
+      
+      // Set user with role
+      let userWithRole: User = {
+        id: data.user.id,
+        email: data.user.email!,
+        role: isAdmin ? "admin" : "establishment_owner",
+      };
+      
+      // If not admin, fetch establishment owner data
+      if (!isAdmin) {
+        const { data: establishmentOwner } = await supabase
+          .from("establishment_owners")
+          .select("password_changed")
+          .eq("id", data.user.id)
+          .single();
+          
+        if (establishmentOwner) {
+          userWithRole.password_changed = establishmentOwner.password_changed;
+        }
+      }
+      
+      setUser(userWithRole);
+      
+      // Redirect based on role
+      if (isAdmin) {
         navigate("/admin-dashboard");
       } else {
-        navigate("/establishment-dashboard");
+        // Check if user needs to change password
+        const { data: establishmentOwner } = await supabase
+          .from("establishment_owners")
+          .select("password_changed")
+          .eq("id", data.user.id)
+          .single();
+          
+        if (establishmentOwner && !establishmentOwner.password_changed) {
+          navigate("/change-password");
+        } else {
+          navigate("/establishment-dashboard");
+        }
       }
       
       setLoading(false);
@@ -109,10 +232,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Logout function
-  const logout = () => {
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    sessionStorage.removeItem("user");
-    navigate("/");
+    
+    // Redirect based on role
+    if (user?.role === "admin") {
+      navigate("/");
+    } else {
+      navigate("/establishment-login");
+    }
   };
 
   // Helper to check if user is admin
