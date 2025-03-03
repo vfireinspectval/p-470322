@@ -12,6 +12,7 @@ import EstablishmentDashboard from "./pages/EstablishmentDashboard";
 import ChangePassword from "./pages/ChangePassword";
 import RegisterEstablishment from "./pages/RegisterEstablishment";
 import RequireAuth from "./components/auth/RequireAuth";
+import EstablishmentLogin from "./pages/EstablishmentLogin";
 
 const queryClient = new QueryClient();
 
@@ -26,6 +27,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/register" element={<RegisterEstablishment />} />
             <Route path="/change-password" element={<ChangePassword />} />
+            <Route path="/establishment-login" element={<EstablishmentLogin />} />
             
             {/* Protected Routes */}
             <Route path="/admin-dashboard" element={

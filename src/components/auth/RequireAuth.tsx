@@ -51,8 +51,12 @@ const RequireAuth: React.FC<RequireAuthProps> = ({ children, requireRole }) => {
   }
 
   if (!user) {
-    // Redirect to login page if not logged in
-    return <Navigate to="/" state={{ from: location }} replace />;
+    // Redirect based on the required role
+    if (requireRole === "admin") {
+      return <Navigate to="/" state={{ from: location }} replace />;
+    } else {
+      return <Navigate to="/establishment-login" state={{ from: location }} replace />;
+    }
   }
 
   if (!isAuthorized()) {

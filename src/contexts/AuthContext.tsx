@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -29,6 +29,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Check for authenticated session on load
   useEffect(() => {
@@ -131,8 +132,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const isAdmin = email === "vfireinspectval@gmail.com";
       
       if (isAdmin) {
+        // If on establishment login page, redirect to admin login
+        if (location.pathname === "/establishment-login") {
+          navigate("/");
+          toast({
+            title: "Login Redirect",
+            description: "Admin should use the admin login page.",
+            variant: "destructive",
+          });
+          await supabase.auth.signOut();
+          setLoading(false);
+          return false;
+        }
         navigate("/admin-dashboard");
       } else {
+        // If on admin login page, redirect to establishment login
+        if (location.pathname === "/") {
+          navigate("/establishment-login");
+          toast({
+            title: "Login Redirect",
+            description: "Establishments should use the establishment login page.",
+            variant: "destructive",
+          });
+          await supabase.auth.signOut();
+          setLoading(false);
+          return false;
+        }
+        
         // Check if user needs to change password
         const { data: establishmentOwner } = await supabase
           .from("establishment_owners")
@@ -165,7 +191,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     await supabase.auth.signOut();
     setUser(null);
-    navigate("/");
+    
+    // Redirect based on role
+    if (user?.role === "admin") {
+      navigate("/");
+    } else {
+      navigate("/establishment-login");
+    }
   };
 
   // Helper to check if user is admin
