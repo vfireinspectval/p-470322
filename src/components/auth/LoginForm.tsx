@@ -1,7 +1,11 @@
+
 import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import { Loader2 } from "lucide-react";
 
 interface LoginFormData {
   email: string;
@@ -10,10 +14,32 @@ interface LoginFormData {
 
 export const LoginForm: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
-  const { register, handleSubmit } = useForm<LoginFormData>();
+  const { register, handleSubmit, formState: { errors } } = useForm<LoginFormData>();
+  const { login, loading } = useAuth();
+  const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const onSubmit = (data: LoginFormData) => {
-    console.log("Form submitted:", data);
+  const onSubmit = async (data: LoginFormData) => {
+    setIsSubmitting(true);
+    try {
+      const success = await login(data.email, data.password);
+      if (!success) {
+        toast({
+          title: "Login Failed",
+          description: "Please check your credentials and try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      toast({
+        title: "Login Error",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -31,12 +57,23 @@ export const LoginForm: React.FC = () => {
             />
           </div>
           <Input
-            {...register("email")}
+            {...register("email", { 
+              required: "Email is required",
+              pattern: {
+                value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                message: "Invalid email address",
+              }
+            })}
             type="email"
             placeholder="Enter your E-mail"
             className="border-none bg-transparent pl-14 h-full text-xl font-bold placeholder:text-[#9B9B9B] focus-visible:ring-0"
           />
         </div>
+        {errors.email && (
+          <p className="text-red-500 text-sm mt-1 ml-14 max-sm:ml-[5%]">
+            {errors.email.message}
+          </p>
+        )}
       </div>
 
       <div className="mb-6">
@@ -52,7 +89,7 @@ export const LoginForm: React.FC = () => {
             />
           </div>
           <Input
-            {...register("password")}
+            {...register("password", { required: "Password is required" })}
             type={showPassword ? "text" : "password"}
             placeholder="Enter your Password"
             className="border-none bg-transparent pl-14 h-full text-xl font-bold placeholder:text-[#9B9B9B] focus-visible:ring-0"
@@ -69,6 +106,11 @@ export const LoginForm: React.FC = () => {
             />
           </button>
         </div>
+        {errors.password && (
+          <p className="text-red-500 text-sm mt-1 ml-14 max-sm:ml-[5%]">
+            {errors.password.message}
+          </p>
+        )}
       </div>
 
       <div className="text-black text-base italic font-medium ml-[57px] mt-1.5">
@@ -77,12 +119,29 @@ export const LoginForm: React.FC = () => {
         </a>
       </div>
 
-      <Button
-        type="submit"
-        className="w-40 h-[54px] text-white text-xl font-bold bg-[#FE623F] hover:bg-[#e5563a] mt-6 mb-0 mx-auto block rounded-[20px] max-sm:w-[140px] max-sm:h-12 max-sm:text-lg"
-      >
-        LOG IN
-      </Button>
+      <div className="flex justify-between items-center px-14 mt-6 max-sm:px-[5%]">
+        <a 
+          href="/register" 
+          className="text-[#FE623F] hover:text-[#e5563a] transition-colors text-base font-medium"
+        >
+          Register Establishment
+        </a>
+        
+        <Button
+          type="submit"
+          disabled={isSubmitting || loading}
+          className="w-40 h-[54px] text-white text-xl font-bold bg-[#FE623F] hover:bg-[#e5563a] mx-auto block rounded-[20px] max-sm:w-[140px] max-sm:h-12 max-sm:text-lg"
+        >
+          {isSubmitting || loading ? (
+            <span className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading...
+            </span>
+          ) : (
+            "LOG IN"
+          )}
+        </Button>
+      </div>
     </form>
   );
 };
