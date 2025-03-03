@@ -68,9 +68,14 @@ const RegisterEstablishment: React.FC = () => {
       }
       
       // Check if email already exists in auth users
-      const { data: existingUser, error: userError } = await supabase.auth.admin.getUserByEmail(data.email);
-      
-      if (existingUser) {
+      // We cannot use admin API from client, so we'll check establishment_owners instead
+      const { data: existingOwner } = await supabase
+        .from("establishment_owners")
+        .select("email")
+        .eq("email", data.email)
+        .maybeSingle();
+        
+      if (existingOwner) {
         toast({
           title: "Registration Failed",
           description: "This email is already registered.",
