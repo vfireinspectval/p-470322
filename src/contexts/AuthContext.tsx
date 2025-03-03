@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
@@ -113,52 +112,97 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
+      console.log("Attempting login for:", email);
       
-      if (error) {
+      // Check if user is admin
+      const isAdmin = email === "vfireinspectval@gmail.com";
+      
+      // Verify on correct login page
+      if (isAdmin && location.pathname === "/establishment-login") {
         toast({
-          title: "Login failed",
-          description: error.message,
+          title: "Login Redirect",
+          description: "Admin should use the admin login page.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return false;
+      } else if (!isAdmin && location.pathname === "/") {
+        toast({
+          title: "Login Redirect",
+          description: "Establishments should use the establishment login page.",
           variant: "destructive",
         });
         setLoading(false);
         return false;
       }
       
-      // Check if user is admin or establishment owner
-      const isAdmin = email === "vfireinspectval@gmail.com";
+      // Attempt to sign in
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
       
-      if (isAdmin) {
-        // If on establishment login page, redirect to admin login
-        if (location.pathname === "/establishment-login") {
-          navigate("/");
+      if (error) {
+        console.error("Login error from Supabase:", error);
+        
+        // Special case for admin
+        if (isAdmin && error.message.includes("Invalid login credentials")) {
           toast({
-            title: "Login Redirect",
-            description: "Admin should use the admin login page.",
+            title: "Admin Login Failed",
+            description: "The admin account may not be set up in Supabase. Please create this account in Supabase Auth.",
             variant: "destructive",
           });
-          await supabase.auth.signOut();
-          setLoading(false);
-          return false;
-        }
-        navigate("/admin-dashboard");
-      } else {
-        // If on admin login page, redirect to establishment login
-        if (location.pathname === "/") {
-          navigate("/establishment-login");
+        } else {
           toast({
-            title: "Login Redirect",
-            description: "Establishments should use the establishment login page.",
+            title: "Login failed",
+            description: error.message,
             variant: "destructive",
           });
-          await supabase.auth.signOut();
-          setLoading(false);
-          return false;
         }
         
+        setLoading(false);
+        return false;
+      }
+      
+      if (!data.user) {
+        console.error("No user returned from login");
+        toast({
+          title: "Login failed",
+          description: "No user data returned",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return false;
+      }
+      
+      console.log("Login successful, user:", data.user);
+      
+      // Set user with role
+      let userWithRole: User = {
+        id: data.user.id,
+        email: data.user.email!,
+        role: isAdmin ? "admin" : "establishment_owner",
+      };
+      
+      // If not admin, fetch establishment owner data
+      if (!isAdmin) {
+        const { data: establishmentOwner } = await supabase
+          .from("establishment_owners")
+          .select("password_changed")
+          .eq("id", data.user.id)
+          .single();
+          
+        if (establishmentOwner) {
+          userWithRole.password_changed = establishmentOwner.password_changed;
+        }
+      }
+      
+      setUser(userWithRole);
+      
+      // Redirect based on role
+      if (isAdmin) {
+        navigate("/admin-dashboard");
+      } else {
         // Check if user needs to change password
         const { data: establishmentOwner } = await supabase
           .from("establishment_owners")

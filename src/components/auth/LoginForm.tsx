@@ -27,6 +27,8 @@ export const LoginForm: React.FC = () => {
   const onSubmit = async (data: LoginFormData) => {
     setIsSubmitting(true);
     try {
+      console.log("Login attempt with:", data.email);
+      
       // Check if this is an admin login attempt
       const isAdmin = data.email === "vfireinspectval@gmail.com";
       
