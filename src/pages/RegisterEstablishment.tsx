@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus, X } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 
 interface BusinessDetails {
   name: string;
@@ -50,56 +49,11 @@ const RegisterEstablishment: React.FC = () => {
     setIsSubmitting(true);
     
     try {
-      // Check if email already exists in pending_registrations
-      const { data: existingPending } = await supabase
-        .from("pending_registrations")
-        .select("email")
-        .eq("email", data.email)
-        .maybeSingle();
+      // Simulate API call delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      if (existingPending) {
-        toast({
-          title: "Registration Failed",
-          description: "This email is already pending approval.",
-          variant: "destructive",
-        });
-        setIsSubmitting(false);
-        return;
-      }
-      
-      // Check if email already exists in auth users
-      // We cannot use admin API from client, so we'll check establishment_owners instead
-      const { data: existingOwner } = await supabase
-        .from("establishment_owners")
-        .select("email")
-        .eq("email", data.email)
-        .maybeSingle();
-        
-      if (existingOwner) {
-        toast({
-          title: "Registration Failed",
-          description: "This email is already registered.",
-          variant: "destructive",
-        });
-        setIsSubmitting(false);
-        return;
-      }
-      
-      // Insert into pending_registrations
-      const { error } = await supabase
-        .from("pending_registrations")
-        .insert({
-          first_name: data.first_name,
-          middle_name: data.middle_name,
-          last_name: data.last_name,
-          email: data.email,
-          businesses: data.businesses
-        });
-      
-      if (error) {
-        console.error("Registration error:", error);
-        throw error;
-      }
+      // In a real app, this would save the data to Supabase
+      console.log("Registration data:", data);
       
       toast({
         title: "Registration Submitted",

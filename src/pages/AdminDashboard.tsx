@@ -1,217 +1,59 @@
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import { Loader2 } from "lucide-react";
 
-interface PendingUser {
-  id: string;
-  first_name: string;
-  middle_name: string | null;
-  last_name: string;
-  email: string;
-  businesses: Array<{ name: string; dti_number: string }>;
-  created_at: string;
-}
-
-interface ApprovedUser {
-  id: string;
-  first_name: string;
-  middle_name: string | null;
-  last_name: string;
-  email: string;
-  businesses: Array<{ name: string; dti_number: string }>;
-  password_changed: boolean;
-  created_at: string;
-}
+// Mock pending registrations
+const mockPendingUsers = [
+  {
+    id: "p1",
+    first_name: "John",
+    middle_name: "A",
+    last_name: "Doe",
+    email: "john.doe@example.com",
+    businesses: [
+      { name: "JD Restaurant", dti_number: "DTI-12345" },
+      { name: "JD Cafe", dti_number: "DTI-67890" }
+    ],
+    created_at: new Date().toISOString()
+  },
+  {
+    id: "p2",
+    first_name: "Jane",
+    middle_name: "",
+    last_name: "Smith",
+    email: "jane.smith@example.com",
+    businesses: [
+      { name: "JS Boutique", dti_number: "DTI-54321" }
+    ],
+    created_at: new Date().toISOString()
+  }
+];
 
 const AdminDashboard: React.FC = () => {
   const { user, logout } = useAuth();
   const { toast } = useToast();
-  const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
-  const [approvedUsers, setApprovedUsers] = useState<ApprovedUser[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isProcessing, setIsProcessing] = useState<string | null>(null);
+  const [pendingUsers, setPendingUsers] = useState(mockPendingUsers);
 
-  useEffect(() => {
-    const fetchPendingUsers = async () => {
-      setIsLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from("pending_registrations")
-          .select("*")
-          .order("created_at", { ascending: false });
-        
-        if (error) throw error;
-        setPendingUsers(data as PendingUser[]);
-        
-        // Also fetch approved users
-        const { data: approvedData, error: approvedError } = await supabase
-          .from("establishment_owners")
-          .select("*")
-          .order("created_at", { ascending: false });
-          
-        if (approvedError) throw approvedError;
-        setApprovedUsers(approvedData as ApprovedUser[]);
-        
-      } catch (error) {
-        console.error("Error fetching pending users:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load pending registrations",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    fetchPendingUsers();
-    
-    // Set up realtime subscription for pending registrations
-    const pendingSubscription = supabase
-      .channel('schema-db-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'pending_registrations'
-        },
-        () => {
-          fetchPendingUsers();
-        }
-      )
-      .subscribe();
-      
-    // Set up realtime subscription for establishment owners
-    const ownersSubscription = supabase
-      .channel('owners-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'establishment_owners'
-        },
-        () => {
-          fetchPendingUsers();
-        }
-      )
-      .subscribe();
-      
-    return () => {
-      supabase.removeChannel(pendingSubscription);
-      supabase.removeChannel(ownersSubscription);
-    };
-  }, [toast]);
-
-  // Generate a random 10-character temporary password
-  const generateTempPassword = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-    let password = '';
-    for (let i = 0; i < 10; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return password;
+  const handleApprove = (userId: string) => {
+    // In a real app, this would create a user in Supabase, send an email, etc.
+    setPendingUsers(prev => prev.filter(user => user.id !== userId));
+    toast({
+      title: "User Approved",
+      description: "User has been approved and notification email sent",
+    });
   };
 
-  const handleApprove = async (pendingUser: PendingUser) => {
-    setIsProcessing(pendingUser.id);
-    try {
-      // Generate temporary password
-      const tempPassword = generateTempPassword();
-      
-      // 1. Create user in Supabase Auth
-      const { data: userData, error: userError } = await supabase.auth.admin.createUser({
-        email: pendingUser.email,
-        password: tempPassword,
-        email_confirm: true
-      });
-      
-      if (userError) throw userError;
-      
-      // 2. Add user to establishment_owners table
-      const { error: ownerError } = await supabase
-        .from("establishment_owners")
-        .insert({
-          id: userData.user.id,
-          first_name: pendingUser.first_name,
-          middle_name: pendingUser.middle_name,
-          last_name: pendingUser.last_name,
-          email: pendingUser.email,
-          businesses: pendingUser.businesses,
-          password_changed: false
-        });
-      
-      if (ownerError) throw ownerError;
-      
-      // 3. Delete from pending_registrations
-      const { error: deleteError } = await supabase
-        .from("pending_registrations")
-        .delete()
-        .eq("id", pendingUser.id);
-      
-      if (deleteError) throw deleteError;
-      
-      // 4. Send email with temporary password
-      const { error: emailError } = await supabase.functions.invoke("send-temp-password", {
-        body: {
-          email: pendingUser.email,
-          firstName: pendingUser.first_name,
-          tempPassword
-        }
-      });
-      
-      if (emailError) throw emailError;
-      
-      toast({
-        title: "User Approved",
-        description: `${pendingUser.first_name} ${pendingUser.last_name} has been approved and temporary password sent`,
-      });
-      
-    } catch (error) {
-      console.error("Error approving user:", error);
-      toast({
-        title: "Approval Failed",
-        description: error.message || "Failed to approve user",
-        variant: "destructive",
-      });
-    } finally {
-      setIsProcessing(null);
-    }
-  };
-
-  const handleReject = async (userId: string) => {
-    setIsProcessing(userId);
-    try {
-      // Delete from pending_registrations
-      const { error } = await supabase
-        .from("pending_registrations")
-        .delete()
-        .eq("id", userId);
-      
-      if (error) throw error;
-      
-      toast({
-        title: "User Rejected",
-        description: "Registration request has been rejected",
-      });
-      
-    } catch (error) {
-      console.error("Error rejecting user:", error);
-      toast({
-        title: "Rejection Failed",
-        description: "Failed to reject user",
-        variant: "destructive",
-      });
-    } finally {
-      setIsProcessing(null);
-    }
+  const handleReject = (userId: string) => {
+    // In a real app, this would delete the pending registration
+    setPendingUsers(prev => prev.filter(user => user.id !== userId));
+    toast({
+      title: "User Rejected",
+      description: "Registration request has been rejected",
+    });
   };
 
   return (
@@ -260,11 +102,7 @@ const AdminDashboard: React.FC = () => {
           <TabsContent value="pending" className="space-y-6">
             <h2 className="text-2xl font-semibold mb-4">Pending Registrations</h2>
             
-            {isLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-[#FE623F]" />
-              </div>
-            ) : pendingUsers.length === 0 ? (
+            {pendingUsers.length === 0 ? (
               <Card>
                 <CardContent className="pt-6">
                   <p className="text-center text-gray-500">No pending registrations</p>
@@ -299,21 +137,13 @@ const AdminDashboard: React.FC = () => {
                         variant="outline"
                         className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white"
                         onClick={() => handleReject(pendingUser.id)}
-                        disabled={isProcessing === pendingUser.id}
                       >
-                        {isProcessing === pendingUser.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        ) : null}
                         Reject
                       </Button>
                       <Button
                         className="bg-[#FE623F] hover:bg-[#e5563a]"
-                        onClick={() => handleApprove(pendingUser)}
-                        disabled={isProcessing === pendingUser.id}
+                        onClick={() => handleApprove(pendingUser.id)}
                       >
-                        {isProcessing === pendingUser.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        ) : null}
                         Approve
                       </Button>
                     </div>
@@ -325,53 +155,11 @@ const AdminDashboard: React.FC = () => {
 
           <TabsContent value="approved">
             <h2 className="text-2xl font-semibold mb-4">Approved Establishments</h2>
-            
-            {isLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-[#FE623F]" />
-              </div>
-            ) : approvedUsers.length === 0 ? (
-              <Card>
-                <CardContent className="pt-6">
-                  <p className="text-center text-gray-500">No approved establishments yet</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="space-y-4">
-                {approvedUsers.map((owner) => (
-                  <Card key={owner.id} className="shadow-sm">
-                    <CardHeader>
-                      <CardTitle>
-                        {owner.first_name} {owner.middle_name && owner.middle_name + " "}
-                        {owner.last_name}
-                      </CardTitle>
-                      <CardDescription>{owner.email}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="mb-4">
-                        <h4 className="font-semibold mb-2">Businesses:</h4>
-                        <ul className="space-y-2">
-                          {owner.businesses.map((business, index) => (
-                            <li key={index} className="pl-4 border-l-2 border-[#FE623F]">
-                              <span className="font-medium">{business.name}</span>
-                              <span className="ml-2 text-sm text-gray-500">
-                                DTI: {business.dti_number}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div className="mt-2 text-sm text-gray-500">
-                        <span className="font-medium mr-2">Password Status:</span>
-                        <span className={owner.password_changed ? "text-green-500" : "text-orange-500"}>
-                          {owner.password_changed ? "Password Changed" : "Temporary Password"}
-                        </span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
+            <Card>
+              <CardContent className="pt-6">
+                <p className="text-center text-gray-500">No approved establishments yet</p>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="inspections">

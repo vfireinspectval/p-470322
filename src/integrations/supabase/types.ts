@@ -9,69 +9,7 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      establishment_owners: {
-        Row: {
-          businesses: Json
-          created_at: string
-          email: string
-          first_name: string
-          id: string
-          last_name: string
-          middle_name: string | null
-          password_changed: boolean | null
-        }
-        Insert: {
-          businesses: Json
-          created_at?: string
-          email: string
-          first_name: string
-          id: string
-          last_name: string
-          middle_name?: string | null
-          password_changed?: boolean | null
-        }
-        Update: {
-          businesses?: Json
-          created_at?: string
-          email?: string
-          first_name?: string
-          id?: string
-          last_name?: string
-          middle_name?: string | null
-          password_changed?: boolean | null
-        }
-        Relationships: []
-      }
-      pending_registrations: {
-        Row: {
-          businesses: Json
-          created_at: string
-          email: string
-          first_name: string
-          id: string
-          last_name: string
-          middle_name: string | null
-        }
-        Insert: {
-          businesses: Json
-          created_at?: string
-          email: string
-          first_name: string
-          id?: string
-          last_name: string
-          middle_name?: string | null
-        }
-        Update: {
-          businesses?: Json
-          created_at?: string
-          email?: string
-          first_name?: string
-          id?: string
-          last_name?: string
-          middle_name?: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Views: {
       [_ in never]: never
