@@ -3,6 +3,7 @@ import React, { useEffect } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth, User } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface RequireAuthProps {
   children: React.ReactNode;
@@ -12,6 +13,27 @@ interface RequireAuthProps {
 const RequireAuth: React.FC<RequireAuthProps> = ({ children, requireRole }) => {
   const { user, loading } = useAuth();
   const location = useLocation();
+
+  // Fetch the establishment owner data to check password_changed status
+  useEffect(() => {
+    const checkPasswordChanged = async () => {
+      if (user && user.role === "establishment_owner") {
+        const { data } = await supabase
+          .from("establishment_owners")
+          .select("password_changed")
+          .eq("id", user.id)
+          .single();
+          
+        if (data && !data.password_changed && location.pathname !== "/change-password") {
+          window.location.href = "/change-password";
+        }
+      }
+    };
+    
+    if (!loading && user) {
+      checkPasswordChanged();
+    }
+  }, [user, loading, location.pathname]);
 
   // Check if user is authenticated and has the required role
   const isAuthorized = (): boolean => {
