@@ -52,14 +52,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           
           // If not admin, fetch establishment owner data
           if (!isAdmin) {
-            const { data: establishmentOwner } = await supabase
+            const { data: ownerData } = await supabase
               .from("establishment_owners")
               .select("*")
               .eq("id", session.user.id)
               .single();
               
-            if (establishmentOwner) {
-              userWithRole.password_changed = establishmentOwner.password_changed;
+            if (ownerData) {
+              userWithRole.password_changed = ownerData.password_changed;
             }
           }
           
@@ -68,7 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Redirect based on role and current location
           if (isAdmin && location.pathname === "/") {
             navigate("/admin-dashboard");
-          } else if (!isAdmin && establishmentOwner && !establishmentOwner.password_changed) {
+          } else if (!isAdmin && userWithRole.password_changed === false && location.pathname !== "/change-password") {
             navigate("/change-password");
           } else if (!isAdmin && location.pathname === "/establishment-login") {
             navigate("/establishment-dashboard");
@@ -98,14 +98,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         // If not admin, fetch establishment owner data
         if (!isAdmin) {
-          const { data: establishmentOwner } = await supabase
+          const { data: ownerData } = await supabase
             .from("establishment_owners")
             .select("*")
             .eq("id", session.user.id)
             .single();
             
-          if (establishmentOwner) {
-            userWithRole.password_changed = establishmentOwner.password_changed;
+          if (ownerData) {
+            userWithRole.password_changed = ownerData.password_changed;
           }
         }
         
@@ -199,14 +199,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // If not admin, fetch establishment owner data
       if (!isAdmin) {
-        const { data: establishmentOwner } = await supabase
+        const { data: ownerData } = await supabase
           .from("establishment_owners")
           .select("password_changed")
           .eq("id", data.user.id)
           .single();
           
-        if (establishmentOwner) {
-          userWithRole.password_changed = establishmentOwner.password_changed;
+        if (ownerData) {
+          userWithRole.password_changed = ownerData.password_changed;
         }
       }
       
@@ -217,13 +217,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         navigate("/admin-dashboard");
       } else {
         // Check if user needs to change password
-        const { data: establishmentOwner } = await supabase
+        const { data: ownerData } = await supabase
           .from("establishment_owners")
           .select("password_changed")
           .eq("id", data.user.id)
           .single();
           
-        if (establishmentOwner && !establishmentOwner.password_changed) {
+        if (ownerData && !ownerData.password_changed) {
           navigate("/change-password");
         } else {
           navigate("/establishment-dashboard");

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus, X, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { Json } from "@/integrations/supabase/types";
 
 interface BusinessDetails {
   name: string;
@@ -107,6 +108,9 @@ const RegisterEstablishment: React.FC = () => {
         return;
       }
       
+      // Convert businesses array to JSONB format
+      const businessesJson = data.businesses as unknown as Json;
+      
       // Insert into pending_registrations with password and contact number
       const { error } = await supabase
         .from("pending_registrations")
@@ -116,7 +120,7 @@ const RegisterEstablishment: React.FC = () => {
           last_name: data.last_name,
           email: data.email,
           contact_number: data.contact_number,
-          businesses: data.businesses,
+          businesses: businessesJson,
           password: data.password // Save the password temporarily in the pending table
         });
       
