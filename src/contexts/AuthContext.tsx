@@ -1,6 +1,7 @@
+
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { toast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 // User types
@@ -29,6 +30,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
+  const { toast } = useToast();
 
   // Check for authenticated session on load
   useEffect(() => {
@@ -62,6 +64,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
           
           setUser(userWithRole);
+          
+          // Redirect based on role and current location
+          if (isAdmin && location.pathname === "/") {
+            navigate("/admin-dashboard");
+          } else if (!isAdmin && establishmentOwner && !establishmentOwner.password_changed) {
+            navigate("/change-password");
+          } else if (!isAdmin && location.pathname === "/establishment-login") {
+            navigate("/establishment-dashboard");
+          }
         }
       } catch (error) {
         console.error("Session check error:", error);
@@ -74,6 +85,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Auth state change event:", event);
+      
       if (event === "SIGNED_IN" && session) {
         const isAdmin = session.user.email === "vfireinspectval@gmail.com";
         
@@ -105,7 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [navigate, location.pathname]);
 
   // Login function
   const login = async (email: string, password: string): Promise<boolean> => {
@@ -149,7 +162,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (isAdmin && error.message.includes("Invalid login credentials")) {
           toast({
             title: "Admin Login Failed",
-            description: "The admin account may not be set up in Supabase. Please create this account in Supabase Auth.",
+            description: "Invalid admin credentials. The admin password is vfireinspect2025.",
             variant: "destructive",
           });
         } else {

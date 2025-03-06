@@ -54,13 +54,24 @@ export const LoginForm: React.FC = () => {
         return;
       }
       
+      // Attempt login
       const success = await login(data.email, data.password);
+      
       if (!success) {
-        toast({
-          title: "Login Failed",
-          description: "Please check your credentials and try again.",
-          variant: "destructive",
-        });
+        // Show more specific error for admin login
+        if (isAdmin) {
+          toast({
+            title: "Admin Login Failed",
+            description: "Please check your credentials. Use password: vfireinspect2025",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Login Failed",
+            description: "Please check your credentials and try again.",
+            variant: "destructive",
+          });
+        }
       }
     } catch (error) {
       console.error("Login error:", error);

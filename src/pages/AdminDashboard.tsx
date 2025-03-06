@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -14,6 +13,8 @@ interface PendingUser {
   middle_name: string | null;
   last_name: string;
   email: string;
+  contact_number: string;
+  password: string;
   businesses: Array<{ name: string; dti_number: string }>;
   created_at: string;
 }
@@ -24,6 +25,7 @@ interface ApprovedUser {
   middle_name: string | null;
   last_name: string;
   email: string;
+  contact_number: string;
   businesses: Array<{ name: string; dti_number: string }>;
   password_changed: boolean;
   created_at: string;
@@ -36,8 +38,23 @@ const AdminDashboard: React.FC = () => {
   const [approvedUsers, setApprovedUsers] = useState<ApprovedUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState<string | null>(null);
+  const [isSetupComplete, setIsSetupComplete] = useState(false);
 
   useEffect(() => {
+    const setupAdmin = async () => {
+      try {
+        const response = await supabase.functions.invoke('setup-admin');
+        console.log('Setup admin response:', response);
+        if (response.data.success) {
+          setIsSetupComplete(true);
+        }
+      } catch (error) {
+        console.error('Error setting up admin:', error);
+      }
+    };
+
+    setupAdmin();
+
     const fetchPendingUsers = async () => {
       setIsLoading(true);
       try {
@@ -49,7 +66,6 @@ const AdminDashboard: React.FC = () => {
         if (error) throw error;
         setPendingUsers(data as PendingUser[]);
         
-        // Also fetch approved users
         const { data: approvedData, error: approvedError } = await supabase
           .from("establishment_owners")
           .select("*")
@@ -72,7 +88,6 @@ const AdminDashboard: React.FC = () => {
     
     fetchPendingUsers();
     
-    // Set up realtime subscription for pending registrations
     const pendingSubscription = supabase
       .channel('schema-db-changes')
       .on(
@@ -88,7 +103,6 @@ const AdminDashboard: React.FC = () => {
       )
       .subscribe();
       
-    // Set up realtime subscription for establishment owners
     const ownersSubscription = supabase
       .channel('owners-changes')
       .on(
@@ -110,32 +124,24 @@ const AdminDashboard: React.FC = () => {
     };
   }, [toast]);
 
-  // Generate a random 10-character temporary password
-  const generateTempPassword = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-    let password = '';
-    for (let i = 0; i < 10; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return password;
-  };
-
   const handleApprove = async (pendingUser: PendingUser) => {
     setIsProcessing(pendingUser.id);
     try {
-      // Generate temporary password
-      const tempPassword = generateTempPassword();
+      console.log("Approving user:", pendingUser);
       
-      // 1. Create user in Supabase Auth
       const { data: userData, error: userError } = await supabase.auth.admin.createUser({
         email: pendingUser.email,
-        password: tempPassword,
+        password: pendingUser.password,
         email_confirm: true
       });
       
-      if (userError) throw userError;
+      if (userError) {
+        console.error("Error creating user:", userError);
+        throw userError;
+      }
       
-      // 2. Add user to establishment_owners table
+      console.log("User created in Auth:", userData);
+      
       const { error: ownerError } = await supabase
         .from("establishment_owners")
         .insert({
@@ -144,34 +150,29 @@ const AdminDashboard: React.FC = () => {
           middle_name: pendingUser.middle_name,
           last_name: pendingUser.last_name,
           email: pendingUser.email,
+          contact_number: pendingUser.contact_number,
           businesses: pendingUser.businesses,
           password_changed: false
         });
       
-      if (ownerError) throw ownerError;
+      if (ownerError) {
+        console.error("Error adding to establishment_owners:", ownerError);
+        throw ownerError;
+      }
       
-      // 3. Delete from pending_registrations
       const { error: deleteError } = await supabase
         .from("pending_registrations")
         .delete()
         .eq("id", pendingUser.id);
       
-      if (deleteError) throw deleteError;
-      
-      // 4. Send email with temporary password
-      const { error: emailError } = await supabase.functions.invoke("send-temp-password", {
-        body: {
-          email: pendingUser.email,
-          firstName: pendingUser.first_name,
-          tempPassword
-        }
-      });
-      
-      if (emailError) throw emailError;
+      if (deleteError) {
+        console.error("Error deleting from pending_registrations:", deleteError);
+        throw deleteError;
+      }
       
       toast({
         title: "User Approved",
-        description: `${pendingUser.first_name} ${pendingUser.last_name} has been approved and temporary password sent`,
+        description: `${pendingUser.first_name} ${pendingUser.last_name} has been approved and can now login`,
       });
       
     } catch (error) {
@@ -189,7 +190,6 @@ const AdminDashboard: React.FC = () => {
   const handleReject = async (userId: string) => {
     setIsProcessing(userId);
     try {
-      // Delete from pending_registrations
       const { error } = await supabase
         .from("pending_registrations")
         .delete()
@@ -278,7 +278,9 @@ const AdminDashboard: React.FC = () => {
                       {pendingUser.first_name} {pendingUser.middle_name && pendingUser.middle_name + " "}
                       {pendingUser.last_name}
                     </CardTitle>
-                    <CardDescription>{pendingUser.email}</CardDescription>
+                    <CardDescription>
+                      Email: {pendingUser.email} | Contact: {pendingUser.contact_number}
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="mb-4">
@@ -345,7 +347,9 @@ const AdminDashboard: React.FC = () => {
                         {owner.first_name} {owner.middle_name && owner.middle_name + " "}
                         {owner.last_name}
                       </CardTitle>
-                      <CardDescription>{owner.email}</CardDescription>
+                      <CardDescription>
+                        Email: {owner.email} | Contact: {owner.contact_number}
+                      </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="mb-4">
@@ -364,7 +368,7 @@ const AdminDashboard: React.FC = () => {
                       <div className="mt-2 text-sm text-gray-500">
                         <span className="font-medium mr-2">Password Status:</span>
                         <span className={owner.password_changed ? "text-green-500" : "text-orange-500"}>
-                          {owner.password_changed ? "Password Changed" : "Temporary Password"}
+                          {owner.password_changed ? "Password Changed" : "Default Password"}
                         </span>
                       </div>
                     </CardContent>

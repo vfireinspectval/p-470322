@@ -12,6 +12,7 @@ export type Database = {
       establishment_owners: {
         Row: {
           businesses: Json
+          contact_number: string
           created_at: string
           email: string
           first_name: string
@@ -22,6 +23,7 @@ export type Database = {
         }
         Insert: {
           businesses: Json
+          contact_number?: string
           created_at?: string
           email: string
           first_name: string
@@ -32,6 +34,7 @@ export type Database = {
         }
         Update: {
           businesses?: Json
+          contact_number?: string
           created_at?: string
           email?: string
           first_name?: string
@@ -45,6 +48,7 @@ export type Database = {
       pending_registrations: {
         Row: {
           businesses: Json
+          contact_number: string
           created_at: string
           email: string
           first_name: string
@@ -54,6 +58,7 @@ export type Database = {
         }
         Insert: {
           businesses: Json
+          contact_number?: string
           created_at?: string
           email: string
           first_name: string
@@ -63,6 +68,7 @@ export type Database = {
         }
         Update: {
           businesses?: Json
+          contact_number?: string
           created_at?: string
           email?: string
           first_name?: string

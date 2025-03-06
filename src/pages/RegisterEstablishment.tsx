@@ -5,7 +5,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, X } from "lucide-react";
+import { Loader2, Plus, X, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface BusinessDetails {
@@ -18,6 +18,9 @@ interface RegistrationFormData {
   middle_name: string;
   last_name: string;
   email: string;
+  contact_number: string;
+  password: string;
+  confirm_password: string;
   businesses: BusinessDetails[];
 }
 
@@ -25,11 +28,14 @@ const RegisterEstablishment: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
   const { 
     register, 
     control, 
-    handleSubmit, 
+    handleSubmit,
+    watch,
     formState: { errors } 
   } = useForm<RegistrationFormData>({
     defaultValues: {
@@ -37,6 +43,9 @@ const RegisterEstablishment: React.FC = () => {
       middle_name: "",
       last_name: "",
       email: "",
+      contact_number: "",
+      password: "",
+      confirm_password: "",
       businesses: [{ name: "", dti_number: "" }]
     }
   });
@@ -46,8 +55,21 @@ const RegisterEstablishment: React.FC = () => {
     name: "businesses"
   });
   
+  const password = watch("password");
+  
   const onSubmit = async (data: RegistrationFormData) => {
     setIsSubmitting(true);
+    
+    // Check if passwords match
+    if (data.password !== data.confirm_password) {
+      toast({
+        title: "Password Error",
+        description: "Passwords do not match.",
+        variant: "destructive",
+      });
+      setIsSubmitting(false);
+      return;
+    }
     
     try {
       // Check if email already exists in pending_registrations
@@ -85,7 +107,7 @@ const RegisterEstablishment: React.FC = () => {
         return;
       }
       
-      // Insert into pending_registrations
+      // Insert into pending_registrations with password and contact number
       const { error } = await supabase
         .from("pending_registrations")
         .insert({
@@ -93,7 +115,9 @@ const RegisterEstablishment: React.FC = () => {
           middle_name: data.middle_name,
           last_name: data.last_name,
           email: data.email,
-          businesses: data.businesses
+          contact_number: data.contact_number,
+          businesses: data.businesses,
+          password: data.password // Save the password temporarily in the pending table
         });
       
       if (error) {
@@ -106,7 +130,7 @@ const RegisterEstablishment: React.FC = () => {
         description: "Your registration has been submitted for approval. You will be notified via email once it's approved.",
       });
       
-      navigate("/");
+      navigate("/establishment-login");
     } catch (error) {
       console.error("Registration error:", error);
       toast({
@@ -186,25 +210,113 @@ const RegisterEstablishment: React.FC = () => {
               </div>
             </div>
             
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                Email Address*
-              </label>
-              <Input
-                id="email"
-                type="email"
-                {...register("email", {
-                  required: "Email is required",
-                  pattern: {
-                    value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                    message: "Invalid email address"
-                  }
-                })}
-                placeholder="Your Email Address"
-              />
-              {errors.email && (
-                <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>
-              )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                  Email Address*
+                </label>
+                <Input
+                  id="email"
+                  type="email"
+                  {...register("email", {
+                    required: "Email is required",
+                    pattern: {
+                      value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                      message: "Invalid email address"
+                    }
+                  })}
+                  placeholder="Your Email Address"
+                />
+                {errors.email && (
+                  <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>
+                )}
+              </div>
+              
+              <div>
+                <label htmlFor="contact_number" className="block text-sm font-medium text-gray-700 mb-1">
+                  Contact Number*
+                </label>
+                <Input
+                  id="contact_number"
+                  type="tel"
+                  {...register("contact_number", {
+                    required: "Contact number is required",
+                  })}
+                  placeholder="Your Contact Number"
+                />
+                {errors.contact_number && (
+                  <p className="text-red-500 text-sm mt-1">{errors.contact_number.message}</p>
+                )}
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                  Password*
+                </label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    {...register("password", {
+                      required: "Password is required",
+                      minLength: {
+                        value: 8,
+                        message: "Password must be at least 8 characters"
+                      }
+                    })}
+                    placeholder="Create a Password"
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4 text-gray-400" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-gray-400" />
+                    )}
+                  </button>
+                </div>
+                {errors.password && (
+                  <p className="text-red-500 text-sm mt-1">{errors.password.message}</p>
+                )}
+              </div>
+              
+              <div>
+                <label htmlFor="confirm_password" className="block text-sm font-medium text-gray-700 mb-1">
+                  Confirm Password*
+                </label>
+                <div className="relative">
+                  <Input
+                    id="confirm_password"
+                    type={showConfirmPassword ? "text" : "password"}
+                    {...register("confirm_password", {
+                      required: "Please confirm your password",
+                      validate: value => value === password || "Passwords do not match"
+                    })}
+                    placeholder="Confirm Your Password"
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="h-4 w-4 text-gray-400" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-gray-400" />
+                    )}
+                  </button>
+                </div>
+                {errors.confirm_password && (
+                  <p className="text-red-500 text-sm mt-1">{errors.confirm_password.message}</p>
+                )}
+              </div>
             </div>
             
             <div>
@@ -283,11 +395,11 @@ const RegisterEstablishment: React.FC = () => {
               <p className="text-sm text-gray-600 mb-6">
                 By submitting this form, you confirm that all information provided is accurate. 
                 After submission, an administrator will review your application. 
-                Upon approval, you will receive a temporary password via email.
+                Upon approval, you will be able to login with the email and password you provided.
               </p>
               
               <div className="flex flex-col sm:flex-row justify-between gap-4">
-                <Link to="/">
+                <Link to="/establishment-login">
                   <Button
                     type="button"
                     variant="outline"
